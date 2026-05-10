@@ -1,0 +1,6 @@
+# VS Code local config (JavaFX paths differ per machine)
+.vscode/
+
+# Compiled class files
+bin/
+*.class

@@ -17,6 +17,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import javafx.application.Platform;
+import javafx.concurrent.Task;
 import javafx.geometry.Bounds;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -29,6 +30,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.Pane;
@@ -60,6 +62,22 @@ public class StockSearchScreen implements AppScreen {
 
     private final Random random =
             new Random();
+
+    private static final Map<String, String> COMPANY_NAMES =
+            Map.ofEntries(
+                    Map.entry("AAPL", "Apple"),
+                    Map.entry("MSFT", "Microsoft"),
+                    Map.entry("NVDA", "NVIDIA"),
+                    Map.entry("AMZN", "Amazon"),
+                    Map.entry("GOOGL", "Alphabet"),
+                    Map.entry("META", "Meta"),
+                    Map.entry("TSLA", "Tesla"),
+                    Map.entry("AVGO", "Broadcom"),
+                    Map.entry("JPM", "JPMorgan Chase"),
+                    Map.entry("LLY", "Eli Lilly"),
+                    Map.entry("QQQ", "Invesco QQQ ETF"),
+                    Map.entry("SPY", "SPDR S&P 500 ETF")
+            );
 
     private String currentSingleSymbol = null;
 
@@ -146,10 +164,40 @@ public class StockSearchScreen implements AppScreen {
         Label sidebarTitle =
                 new Label("Stocks");
 
+        Label customSearchLabel =
+                new Label("Search Any Stock");
+
+        customSearchLabel.setStyle(
+                "-fx-font-size: 11px; -fx-text-fill: #888888;"
+        );
+
+        TextField customSearchField =
+                new TextField();
+
+        customSearchField.setPromptText("Ticker (e.g. NFLX)");
+        customSearchField.setMaxWidth(Double.MAX_VALUE);
+
+        Button searchButton =
+                new Button("Search");
+
+        searchButton.setMaxWidth(Double.MAX_VALUE);
+
+        Label searchStatus =
+                new Label();
+
+        searchStatus.setWrapText(true);
+        searchStatus.setMaxWidth(Double.MAX_VALUE);
+        searchStatus.setStyle("-fx-font-size: 10px;");
+
         VBox leftBar =
                 new VBox(
-                        12,
+                        8,
                         sidebarTitle,
+                        customSearchLabel,
+                        customSearchField,
+                        searchButton,
+                        searchStatus,
+                        new Separator(),
                         stockSearchField,
                         stockScrollPane,
                         overlayCheckBox,
@@ -202,6 +250,19 @@ public class StockSearchScreen implements AppScreen {
                 }
         );
 
+        customSearchField.setOnAction(e -> searchButton.fire());
+
+        searchButton.setOnAction(e -> handleCustomSearch(
+                customSearchField.getText().trim().toUpperCase(),
+                searchStatus,
+                chart,
+                xAxis,
+                yAxis,
+                overlayCheckBox,
+                stockButtonBox,
+                stockSearchField
+        ));
+
         BorderPane root =
                 new BorderPane();
 
@@ -209,6 +270,80 @@ public class StockSearchScreen implements AppScreen {
         root.setCenter(chartArea);
 
         return root;
+    }
+
+    private void handleCustomSearch(
+            String symbol,
+            Label statusLabel,
+            LineChart<Number, Number> chart,
+            NumberAxis xAxis,
+            NumberAxis yAxis,
+            CheckBox overlayCheckBox,
+            VBox stockButtonBox,
+            TextField filterField) {
+
+        if (symbol.isEmpty()) {
+            statusLabel.setText("Enter a ticker symbol.");
+            return;
+        }
+
+        statusLabel.setText("Fetching " + symbol + "...");
+
+        Task<Boolean> task =
+                new Task<>() {
+
+            @Override
+            protected Boolean call() throws Exception {
+                return StockDataRecorder.fetchAndRecordSymbol(symbol);
+            }
+        };
+
+        task.setOnSucceeded(event -> {
+
+            loadAllStockDataFromTxt();
+
+            if (!stockDataBySymbol.containsKey(symbol)) {
+                statusLabel.setText("No data found for " + symbol + ".");
+                return;
+            }
+
+            boolean wasFetched = task.getValue();
+
+            statusLabel.setText(
+                    wasFetched
+                            ? "Loaded " + symbol + "."
+                            : symbol + " (cached)."
+            );
+
+            currentSingleSymbol = symbol;
+            selectedOverlaySymbols.clear();
+
+            updateChart(chart, xAxis, yAxis, overlayCheckBox);
+
+            refreshStockButtons(
+                    stockButtonBox,
+                    filterField.getText(),
+                    chart,
+                    xAxis,
+                    yAxis,
+                    overlayCheckBox
+            );
+        });
+
+        task.setOnFailed(event -> {
+
+            Throwable error = task.getException();
+
+            statusLabel.setText(
+                    error != null
+                            ? error.getMessage()
+                            : "Failed to fetch " + symbol + "."
+            );
+        });
+
+        Thread thread = new Thread(task);
+        thread.setDaemon(true);
+        thread.start();
     }
 
     private void refreshStockButtons(
@@ -228,13 +363,28 @@ public class StockSearchScreen implements AppScreen {
 
         for (String symbol : availableSymbols) {
 
+            String companyName =
+                    COMPANY_NAMES.getOrDefault(symbol, "");
+
+            boolean matchesSymbol =
+                    symbol.contains(cleanedFilter);
+
+            boolean matchesName =
+                    companyName.toUpperCase().contains(cleanedFilter);
+
             if (!cleanedFilter.isEmpty()
-                    && !symbol.contains(cleanedFilter)) {
+                    && !matchesSymbol
+                    && !matchesName) {
                 continue;
             }
 
+            String buttonLabel =
+                    companyName.isEmpty()
+                            ? symbol
+                            : symbol + "\n" + companyName;
+
             Button stockButton =
-                    new Button(symbol);
+                    new Button(buttonLabel);
 
             stockButton.setMaxWidth(Double.MAX_VALUE);
 
