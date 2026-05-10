@@ -8,6 +8,7 @@ public class Main extends Application {
     public static final String HOME = "home";
     public static final String STOCK_SEARCH = "stockSearch";
     public static final String ABOUT = "about";
+    public static final String WATCHLIST = "watchlist";
 
     @Override
     public void start(Stage stage) {

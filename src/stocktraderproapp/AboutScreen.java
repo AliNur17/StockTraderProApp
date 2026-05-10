@@ -6,12 +6,10 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.layout.VBox;
 
-public class AboutScreen implements AppScreen {
-
-    private final ScreenManager manager;
+public class AboutScreen extends BaseScreen {
 
     public AboutScreen(ScreenManager manager) {
-        this.manager = manager;
+        super(manager);
     }
 
     @Override
