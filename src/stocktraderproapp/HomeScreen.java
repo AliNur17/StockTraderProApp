@@ -6,12 +6,10 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.layout.VBox;
 
-public class HomeScreen implements AppScreen {
-
-    private final ScreenManager manager;
+public class HomeScreen extends BaseScreen {
 
     public HomeScreen(ScreenManager manager) {
-        this.manager = manager;
+        super(manager);
     }
 
     @Override
@@ -20,12 +18,14 @@ public class HomeScreen implements AppScreen {
         title.setStyle("-fx-font-size: 32px; -fx-font-weight: bold;");
 
         Button searchButton = new Button("Search Stock");
+        Button watchlistButton = new Button("My Watchlist");
         Button aboutButton = new Button("About");
 
         searchButton.setOnAction(e -> manager.show(Main.STOCK_SEARCH));
+        watchlistButton.setOnAction(e -> manager.show(Main.WATCHLIST));
         aboutButton.setOnAction(e -> manager.show(Main.ABOUT));
 
-        VBox root = new VBox(20, title, searchButton, aboutButton);
+        VBox root = new VBox(20, title, searchButton, watchlistButton, aboutButton);
         root.setAlignment(Pos.CENTER);
 
         return root;

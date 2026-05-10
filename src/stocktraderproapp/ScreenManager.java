@@ -20,6 +20,7 @@ public class ScreenManager {
         screens.put(Main.HOME, new HomeScreen(this));
         screens.put(Main.STOCK_SEARCH, new StockSearchScreen(this));
         screens.put(Main.ABOUT, new AboutScreen(this));
+        screens.put(Main.WATCHLIST, new WatchlistScreen(this));
     }
 
     public void show(String screenName) {

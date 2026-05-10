@@ -41,9 +41,7 @@ import javafx.scene.shape.Circle;
 import javafx.scene.shape.Line;
 import javafx.util.StringConverter;
 
-public class StockSearchScreen implements AppScreen {
-
-    private final ScreenManager manager;
+public class StockSearchScreen extends BaseScreen {
 
     private static final Path STOCK_DATA_FILE =
             Path.of("stock_closing_prices_may5_2026_to_100_days_prior.txt");
@@ -63,26 +61,11 @@ public class StockSearchScreen implements AppScreen {
     private final Random random =
             new Random();
 
-    private static final Map<String, String> COMPANY_NAMES =
-            Map.ofEntries(
-                    Map.entry("AAPL", "Apple"),
-                    Map.entry("MSFT", "Microsoft"),
-                    Map.entry("NVDA", "NVIDIA"),
-                    Map.entry("AMZN", "Amazon"),
-                    Map.entry("GOOGL", "Alphabet"),
-                    Map.entry("META", "Meta"),
-                    Map.entry("TSLA", "Tesla"),
-                    Map.entry("AVGO", "Broadcom"),
-                    Map.entry("JPM", "JPMorgan Chase"),
-                    Map.entry("LLY", "Eli Lilly"),
-                    Map.entry("QQQ", "Invesco QQQ ETF"),
-                    Map.entry("SPY", "SPDR S&P 500 ETF")
-            );
-
     private String currentSingleSymbol = null;
+    private Button watchlistToggleButton;
 
     public StockSearchScreen(ScreenManager manager) {
-        this.manager = manager;
+        super(manager);
         loadAllStockDataFromTxt();
     }
 
@@ -189,6 +172,23 @@ public class StockSearchScreen implements AppScreen {
         searchStatus.setMaxWidth(Double.MAX_VALUE);
         searchStatus.setStyle("-fx-font-size: 10px;");
 
+        watchlistToggleButton = new Button("Add to Watchlist");
+        watchlistToggleButton.setMaxWidth(Double.MAX_VALUE);
+        watchlistToggleButton.setDisable(true);
+        watchlistToggleButton.setOnAction(e -> {
+            if (currentSingleSymbol == null) return;
+            if (WatchlistManager.contains(currentSingleSymbol)) {
+                WatchlistManager.removeSymbol(currentSingleSymbol);
+            } else {
+                WatchlistManager.addSymbol(currentSingleSymbol);
+            }
+            refreshWatchlistButton();
+        });
+
+        Button viewWatchlistButton = new Button("View Watchlist");
+        viewWatchlistButton.setMaxWidth(Double.MAX_VALUE);
+        viewWatchlistButton.setOnAction(e -> manager.show(Main.WATCHLIST));
+
         VBox leftBar =
                 new VBox(
                         8,
@@ -201,13 +201,15 @@ public class StockSearchScreen implements AppScreen {
                         stockSearchField,
                         stockScrollPane,
                         overlayCheckBox,
+                        watchlistToggleButton,
+                        viewWatchlistButton,
                         backButton
                 );
 
         leftBar.setPadding(new Insets(15));
-        leftBar.setPrefWidth(190);
-        leftBar.setMinWidth(190);
-        leftBar.setMaxWidth(190);
+        leftBar.setPrefWidth(210);
+        leftBar.setMinWidth(210);
+        leftBar.setMaxWidth(210);
 
         Runnable refreshButtons =
                 () -> refreshStockButtons(
@@ -328,6 +330,8 @@ public class StockSearchScreen implements AppScreen {
                     yAxis,
                     overlayCheckBox
             );
+
+            refreshWatchlistButton();
         });
 
         task.setOnFailed(event -> {
@@ -364,7 +368,7 @@ public class StockSearchScreen implements AppScreen {
         for (String symbol : availableSymbols) {
 
             String companyName =
-                    COMPANY_NAMES.getOrDefault(symbol, "");
+                    WatchlistManager.COMPANY_NAMES.getOrDefault(symbol, "");
 
             boolean matchesSymbol =
                     symbol.contains(cleanedFilter);
@@ -378,10 +382,18 @@ public class StockSearchScreen implements AppScreen {
                 continue;
             }
 
+            String percentChange =
+                    getPercentChangeLabel(symbol);
+
+            String symbolLine =
+                    percentChange.isEmpty()
+                            ? symbol
+                            : symbol + "  " + percentChange;
+
             String buttonLabel =
                     companyName.isEmpty()
-                            ? symbol
-                            : symbol + "\n" + companyName;
+                            ? symbolLine
+                            : symbolLine + "\n" + companyName;
 
             Button stockButton =
                     new Button(buttonLabel);
@@ -421,6 +433,8 @@ public class StockSearchScreen implements AppScreen {
                         yAxis,
                         overlayCheckBox
                 );
+
+                refreshWatchlistButton();
             });
 
             stockButtonBox.getChildren().add(stockButton);
@@ -1113,6 +1127,52 @@ public class StockSearchScreen implements AppScreen {
                 }
             }
         }
+    }
+
+    private void refreshWatchlistButton() {
+
+        if (currentSingleSymbol == null) {
+            watchlistToggleButton.setDisable(true);
+            watchlistToggleButton.setText("Add to Watchlist");
+            return;
+        }
+
+        watchlistToggleButton.setDisable(false);
+
+        if (WatchlistManager.contains(currentSingleSymbol)) {
+            watchlistToggleButton.setText("★ Remove from Watchlist");
+        } else {
+            watchlistToggleButton.setText("☆ Add to Watchlist");
+        }
+    }
+
+    private String getPercentChangeLabel(String symbol) {
+
+        List<StockRecord> records =
+                stockDataBySymbol.get(symbol);
+
+        if (records == null || records.size() < 2) {
+            return "";
+        }
+
+        double earliest =
+                records.get(0).getClose();
+
+        double latest =
+                records.get(records.size() - 1).getClose();
+
+        if (earliest == 0) {
+            return "";
+        }
+
+        double pct =
+                (latest - earliest) / earliest * 100;
+
+        return String.format(
+                "%s%.1f%%",
+                pct >= 0 ? "+" : "",
+                pct
+        );
     }
 
     private String getColorForSymbol(String symbol) {

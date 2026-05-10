@@ -292,7 +292,7 @@ public class StockDataRecorder {
         return requiredDates;
     }
 
-    private static boolean isTradingDate(LocalDate date) {
+    static boolean isTradingDate(LocalDate date) {
 
         DayOfWeek day =
                 date.getDayOfWeek();
