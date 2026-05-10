@@ -1,9 +1,6 @@
-package stocktraderproapp;
+﻿package stocktraderproapp;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -12,7 +9,6 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -29,6 +25,7 @@ import javafx.scene.chart.XYChart;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
@@ -43,9 +40,6 @@ import javafx.util.StringConverter;
 
 public class StockSearchScreen extends BaseScreen {
 
-    private static final Path STOCK_DATA_FILE =
-            Path.of("stock_closing_prices_may5_2026_to_100_days_prior.txt");
-
     private final Map<String, List<StockRecord>> stockDataBySymbol =
             new HashMap<>();
 
@@ -55,11 +49,8 @@ public class StockSearchScreen extends BaseScreen {
     private final Set<String> selectedOverlaySymbols =
             new LinkedHashSet<>();
 
-    private final Map<String, String> colorBySymbol =
-            new HashMap<>();
-
-    private final Random random =
-            new Random();
+    private final SymbolColorManager colorManager =
+            new SymbolColorManager();
 
     private String currentSingleSymbol = null;
     private Button watchlistToggleButton;
@@ -96,11 +87,7 @@ public class StockSearchScreen extends BaseScreen {
         chart.setPadding(new Insets(20, 40, 10, 40));
 
         Pane hoverPane =
-                createHoverPane(
-                        chart,
-                        xAxis,
-                        yAxis
-                );
+                new ChartHoverOverlay(chart, xAxis, yAxis).getPane();
 
         StackPane chartStack =
                 new StackPane(
@@ -172,6 +159,10 @@ public class StockSearchScreen extends BaseScreen {
         searchStatus.setMaxWidth(Double.MAX_VALUE);
         searchStatus.setStyle("-fx-font-size: 10px;");
 
+        ProgressIndicator loadingSpinner = new ProgressIndicator();
+        loadingSpinner.setMaxSize(22, 22);
+        loadingSpinner.setVisible(false);
+
         watchlistToggleButton = new Button("Add to Watchlist");
         watchlistToggleButton.setMaxWidth(Double.MAX_VALUE);
         watchlistToggleButton.setDisable(true);
@@ -196,6 +187,7 @@ public class StockSearchScreen extends BaseScreen {
                         customSearchLabel,
                         customSearchField,
                         searchButton,
+                        loadingSpinner,
                         searchStatus,
                         new Separator(),
                         stockSearchField,
@@ -257,6 +249,8 @@ public class StockSearchScreen extends BaseScreen {
         searchButton.setOnAction(e -> handleCustomSearch(
                 customSearchField.getText().trim().toUpperCase(),
                 searchStatus,
+                loadingSpinner,
+                searchButton,
                 chart,
                 xAxis,
                 yAxis,
@@ -277,6 +271,8 @@ public class StockSearchScreen extends BaseScreen {
     private void handleCustomSearch(
             String symbol,
             Label statusLabel,
+            ProgressIndicator spinner,
+            Button searchBtn,
             LineChart<Number, Number> chart,
             NumberAxis xAxis,
             NumberAxis yAxis,
@@ -289,7 +285,9 @@ public class StockSearchScreen extends BaseScreen {
             return;
         }
 
-        statusLabel.setText("Fetching " + symbol + "...");
+        statusLabel.setText("");
+        spinner.setVisible(true);
+        searchBtn.setDisable(true);
 
         Task<Boolean> task =
                 new Task<>() {
@@ -302,10 +300,13 @@ public class StockSearchScreen extends BaseScreen {
 
         task.setOnSucceeded(event -> {
 
+            spinner.setVisible(false);
+            searchBtn.setDisable(false);
+
             loadAllStockDataFromTxt();
 
             if (!stockDataBySymbol.containsKey(symbol)) {
-                statusLabel.setText("No data found for " + symbol + ".");
+                statusLabel.setText("\"" + symbol + "\" not found. Check the ticker.");
                 return;
             }
 
@@ -336,13 +337,12 @@ public class StockSearchScreen extends BaseScreen {
 
         task.setOnFailed(event -> {
 
-            Throwable error = task.getException();
+            spinner.setVisible(false);
+            searchBtn.setDisable(false);
 
-            statusLabel.setText(
-                    error != null
-                            ? error.getMessage()
-                            : "Failed to fetch " + symbol + "."
-            );
+            Throwable error = task.getException();
+            String msg = error != null ? error.getMessage() : null;
+            statusLabel.setText(formatErrorMessage(symbol, msg));
         });
 
         Thread thread = new Thread(task);
@@ -368,7 +368,7 @@ public class StockSearchScreen extends BaseScreen {
         for (String symbol : availableSymbols) {
 
             String companyName =
-                    WatchlistManager.COMPANY_NAMES.getOrDefault(symbol, "");
+                    StockInfo.COMPANY_NAMES.getOrDefault(symbol, "");
 
             boolean matchesSymbol =
                     symbol.contains(cleanedFilter);
@@ -405,7 +405,7 @@ public class StockSearchScreen extends BaseScreen {
                 stockButton.setStyle(
                         "-fx-font-weight: bold;"
                                 + "-fx-border-color: "
-                                + getColorForSymbol(symbol)
+                                + colorManager.getColorForSymbol(symbol)
                                 + ";"
                                 + "-fx-border-width: 2;"
                 );
@@ -752,41 +752,19 @@ public class StockSearchScreen extends BaseScreen {
         stockDataBySymbol.clear();
         availableSymbols.clear();
 
-        if (!Files.exists(STOCK_DATA_FILE)) {
-            return;
-        }
+        StockDataFileManager fileManager =
+                new StockDataFileManager(StockInfo.STOCK_DATA_FILE);
 
-        try (BufferedReader reader =
-                     Files.newBufferedReader(STOCK_DATA_FILE)) {
+        try {
 
-            String line;
+            Map<String, List<StockRecord>> loaded =
+                    fileManager.loadAllRecords();
 
-            while ((line = reader.readLine()) != null) {
-
-                StockRecord record =
-                        parseStockRecord(line);
-
-                if (record == null) {
-                    continue;
-                }
-
-                stockDataBySymbol
-                        .computeIfAbsent(
-                                record.getSymbol(),
-                                key -> new ArrayList<>()
-                        )
-                        .add(record);
-            }
-
-            availableSymbols.addAll(
-                    stockDataBySymbol.keySet()
-            );
-
+            stockDataBySymbol.putAll(loaded);
+            availableSymbols.addAll(loaded.keySet());
             Collections.sort(availableSymbols);
 
-            for (List<StockRecord> records
-                    : stockDataBySymbol.values()) {
-
+            for (List<StockRecord> records : stockDataBySymbol.values()) {
                 Collections.sort(records);
             }
 
@@ -795,310 +773,6 @@ public class StockSearchScreen extends BaseScreen {
         }
     }
 
-    private StockRecord parseStockRecord(String line) {
-
-        if (line == null) {
-            return null;
-        }
-
-        line =
-                line.trim();
-
-        if (line.isEmpty()
-                || line.equalsIgnoreCase("Symbol,Date,Close")) {
-            return null;
-        }
-
-        String[] parts =
-                line.split(",");
-
-        if (parts.length < 3) {
-            return null;
-        }
-
-        try {
-
-            String symbol =
-                    parts[0].trim().toUpperCase();
-
-            LocalDate date =
-                    LocalDate.parse(parts[1].trim());
-
-            double close =
-                    Double.parseDouble(parts[2].trim());
-
-            return new StockRecord(
-                    symbol,
-                    date,
-                    close
-            );
-
-        } catch (Exception e) {
-
-            return null;
-        }
-    }
-
-    private Pane createHoverPane(
-            LineChart<Number, Number> chart,
-            NumberAxis xAxis,
-            NumberAxis yAxis) {
-
-        Pane hoverPane =
-                new Pane();
-
-        hoverPane.setPickOnBounds(true);
-        hoverPane.setStyle("-fx-background-color: transparent;");
-
-        Line horizontalLine =
-                new Line();
-
-        horizontalLine.setManaged(false);
-        horizontalLine.setVisible(false);
-        horizontalLine.setStyle(
-                "-fx-stroke: #777777;"
-                        + "-fx-stroke-width: 1;"
-                        + "-fx-stroke-dash-array: 6 4;"
-        );
-
-        Line verticalLine =
-                new Line();
-
-        verticalLine.setManaged(false);
-        verticalLine.setVisible(false);
-        verticalLine.setStyle(
-                "-fx-stroke: #777777;"
-                        + "-fx-stroke-width: 1;"
-                        + "-fx-stroke-dash-array: 6 4;"
-        );
-
-        Circle hoverPoint =
-                new Circle(5);
-
-        hoverPoint.setManaged(false);
-        hoverPoint.setVisible(false);
-        hoverPoint.setStyle(
-                "-fx-fill: white;"
-                        + "-fx-stroke: black;"
-                        + "-fx-stroke-width: 2;"
-        );
-
-        Label hoverBox =
-                new Label();
-
-        hoverBox.setManaged(false);
-        hoverBox.setVisible(false);
-        hoverBox.setStyle(
-                "-fx-background-color: white;"
-                        + "-fx-border-color: #333333;"
-                        + "-fx-border-width: 1;"
-                        + "-fx-padding: 6;"
-                        + "-fx-font-size: 11px;"
-                        + "-fx-text-fill: black;"
-        );
-
-        hoverPane.getChildren().addAll(
-                horizontalLine,
-                verticalLine,
-                hoverPoint,
-                hoverBox
-        );
-
-        hoverPane.setOnMouseMoved(event -> {
-
-            updateHoverOverlay(
-                    event.getX(),
-                    event.getY(),
-                    chart,
-                    xAxis,
-                    yAxis,
-                    hoverPane,
-                    horizontalLine,
-                    verticalLine,
-                    hoverPoint,
-                    hoverBox
-            );
-        });
-
-        hoverPane.setOnMouseExited(event -> {
-
-            horizontalLine.setVisible(false);
-            verticalLine.setVisible(false);
-            hoverPoint.setVisible(false);
-            hoverBox.setVisible(false);
-        });
-
-        return hoverPane;
-    }
-
-    private void updateHoverOverlay(
-            double mouseX,
-            double mouseY,
-            LineChart<Number, Number> chart,
-            NumberAxis xAxis,
-            NumberAxis yAxis,
-            Pane hoverPane,
-            Line horizontalLine,
-            Line verticalLine,
-            Circle hoverPoint,
-            Label hoverBox) {
-
-        Node plotBackground =
-                chart.lookup(".chart-plot-background");
-
-        if (plotBackground == null) {
-            return;
-        }
-
-        Bounds plotBounds =
-                hoverPane.sceneToLocal(
-                        plotBackground.localToScene(
-                                plotBackground.getBoundsInLocal()
-                        )
-                );
-
-        if (!plotBounds.contains(mouseX, mouseY)) {
-
-            horizontalLine.setVisible(false);
-            verticalLine.setVisible(false);
-            hoverPoint.setVisible(false);
-            hoverBox.setVisible(false);
-            return;
-        }
-
-        XYChart.Series<Number, Number> closestSeries =
-                null;
-
-        XYChart.Data<Number, Number> closestData =
-                null;
-
-        double closestX =
-                0;
-
-        double closestY =
-                0;
-
-        double smallestDistance =
-                Double.MAX_VALUE;
-
-        for (XYChart.Series<Number, Number> series
-                : chart.getData()) {
-
-            for (XYChart.Data<Number, Number> data
-                    : series.getData()) {
-
-                double xValue =
-                        data.getXValue().doubleValue();
-
-                double yValue =
-                        data.getYValue().doubleValue();
-
-                double displayX =
-                        plotBounds.getMinX()
-                                + xAxis.getDisplayPosition(xValue);
-
-                double displayY =
-                        plotBounds.getMinY()
-                                + yAxis.getDisplayPosition(yValue);
-
-                double distance =
-                        Math.hypot(
-                                mouseX - displayX,
-                                mouseY - displayY
-                        );
-
-                if (distance < smallestDistance) {
-
-                    smallestDistance = distance;
-                    closestSeries = series;
-                    closestData = data;
-                    closestX = displayX;
-                    closestY = displayY;
-                }
-            }
-        }
-
-        if (closestData == null || smallestDistance > 35) {
-
-            horizontalLine.setVisible(false);
-            verticalLine.setVisible(false);
-            hoverPoint.setVisible(false);
-            hoverBox.setVisible(false);
-            return;
-        }
-
-        StockRecord record =
-                (StockRecord) closestData.getExtraValue();
-
-        if (record == null || closestSeries == null) {
-            return;
-        }
-
-        DateTimeFormatter formatter =
-                DateTimeFormatter.ofPattern("MMM dd, yyyy");
-
-        String symbol =
-                closestSeries.getName();
-
-        String closeValue =
-                String.format(
-                        "%.2f",
-                        record.getClose()
-                );
-
-        horizontalLine.setStartX(plotBounds.getMinX());
-        horizontalLine.setEndX(plotBounds.getMaxX());
-        horizontalLine.setStartY(closestY);
-        horizontalLine.setEndY(closestY);
-
-        verticalLine.setStartX(closestX);
-        verticalLine.setEndX(closestX);
-        verticalLine.setStartY(plotBounds.getMinY());
-        verticalLine.setEndY(plotBounds.getMaxY());
-
-        hoverPoint.setCenterX(closestX);
-        hoverPoint.setCenterY(closestY);
-
-        hoverBox.setText(
-                symbol
-                        + "\nDate: "
-                        + record.getDate().format(formatter)
-                        + "\nClose: $"
-                        + closeValue
-        );
-
-        hoverBox.applyCss();
-        hoverBox.autosize();
-
-        double boxX =
-                closestX + 12;
-
-        double boxY =
-                closestY - 45;
-
-        if (boxX + hoverBox.getWidth()
-                > plotBounds.getMaxX()) {
-
-            boxX =
-                    closestX
-                            - hoverBox.getWidth()
-                            - 12;
-        }
-
-        if (boxY < plotBounds.getMinY()) {
-            boxY = plotBounds.getMinY() + 5;
-        }
-
-        hoverBox.relocate(
-                boxX,
-                boxY
-        );
-
-        horizontalLine.setVisible(true);
-        verticalLine.setVisible(true);
-        hoverPoint.setVisible(true);
-        hoverBox.setVisible(true);
-    }
 
     private void applyStableSeriesColors(
             LineChart<Number, Number> chart) {
@@ -1107,7 +781,7 @@ public class StockSearchScreen extends BaseScreen {
                 : chart.getData()) {
 
             String color =
-                    getColorForSymbol(series.getName());
+                    colorManager.getColorForSymbol(series.getName());
 
             Node seriesNode =
                     series.getNode();
@@ -1129,6 +803,21 @@ public class StockSearchScreen extends BaseScreen {
         }
     }
 
+    static String formatErrorMessage(String symbol, String rawError) {
+
+        if (rawError != null
+                && (rawError.contains("rate limit")
+                        || rawError.contains("25 requests"))) {
+            return "API rate limit reached. Try again tomorrow.";
+        }
+
+        if (rawError != null && rawError.contains("No stock data found")) {
+            return "\"" + symbol + "\" not found. Check the ticker.";
+        }
+
+        return "Network error. Check your connection.";
+    }
+
     private void refreshWatchlistButton() {
 
         if (currentSingleSymbol == null) {
@@ -1140,9 +829,9 @@ public class StockSearchScreen extends BaseScreen {
         watchlistToggleButton.setDisable(false);
 
         if (WatchlistManager.contains(currentSingleSymbol)) {
-            watchlistToggleButton.setText("★ Remove from Watchlist");
+            watchlistToggleButton.setText("â˜… Remove from Watchlist");
         } else {
-            watchlistToggleButton.setText("☆ Add to Watchlist");
+            watchlistToggleButton.setText("â˜† Add to Watchlist");
         }
     }
 
@@ -1175,65 +864,5 @@ public class StockSearchScreen extends BaseScreen {
         );
     }
 
-    private String getColorForSymbol(String symbol) {
 
-        return colorBySymbol.computeIfAbsent(
-                symbol,
-                key -> generateRandomColor()
-        );
-    }
-
-    private String generateRandomColor() {
-
-        int red =
-                80 + random.nextInt(176);
-
-        int green =
-                80 + random.nextInt(176);
-
-        int blue =
-                80 + random.nextInt(176);
-
-        return String.format(
-                "#%02x%02x%02x",
-                red,
-                green,
-                blue
-        );
-    }
-
-    private static class StockRecord
-            implements Comparable<StockRecord> {
-
-        private final String symbol;
-        private final LocalDate date;
-        private final double close;
-
-        public StockRecord(
-                String symbol,
-                LocalDate date,
-                double close) {
-
-            this.symbol = symbol;
-            this.date = date;
-            this.close = close;
-        }
-
-        public String getSymbol() {
-            return symbol;
-        }
-
-        public LocalDate getDate() {
-            return date;
-        }
-
-        public double getClose() {
-            return close;
-        }
-
-        @Override
-        public int compareTo(StockRecord other) {
-            return this.date.compareTo(other.date);
-        }
-    }
 }

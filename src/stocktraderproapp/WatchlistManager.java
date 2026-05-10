@@ -6,28 +6,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashSet;
-import java.util.Map;
 import java.util.Set;
 
 public class WatchlistManager {
 
     private static final Path WATCHLIST_FILE = Path.of("watchlist.txt");
-
-    public static final Map<String, String> COMPANY_NAMES =
-            Map.ofEntries(
-                    Map.entry("AAPL", "Apple"),
-                    Map.entry("MSFT", "Microsoft"),
-                    Map.entry("NVDA", "NVIDIA"),
-                    Map.entry("AMZN", "Amazon"),
-                    Map.entry("GOOGL", "Alphabet"),
-                    Map.entry("META", "Meta"),
-                    Map.entry("TSLA", "Tesla"),
-                    Map.entry("AVGO", "Broadcom"),
-                    Map.entry("JPM", "JPMorgan Chase"),
-                    Map.entry("LLY", "Eli Lilly"),
-                    Map.entry("QQQ", "Invesco QQQ ETF"),
-                    Map.entry("SPY", "SPDR S&P 500 ETF")
-            );
 
     private WatchlistManager() {}
 
