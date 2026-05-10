@@ -45,12 +45,8 @@ public class StockDataRecorder {
             "SPY"
     };
 
-    /*
-     * May 5, 2026 to 100 days before.
-     * This gives January 25, 2026 through May 5, 2026.
-     */
     private static final LocalDate END_DATE =
-            LocalDate.of(2026, 5, 5);
+            LocalDate.now();
 
     private static final LocalDate START_DATE =
             END_DATE.minusDays(100);
@@ -115,6 +111,61 @@ public class StockDataRecorder {
 
         thread.setDaemon(true);
         thread.start();
+    }
+
+    public static boolean fetchAndRecordSymbol(String symbol)
+            throws Exception {
+
+        String upperSymbol = symbol.toUpperCase();
+
+        ensureOutputFileExists();
+
+        Map<String, Set<LocalDate>> existingDatesBySymbol =
+                loadExistingDatesBySymbol();
+
+        Set<LocalDate> existingDates =
+                existingDatesBySymbol.getOrDefault(
+                        upperSymbol,
+                        new HashSet<>()
+                );
+
+        Set<LocalDate> requiredDates =
+                buildRequiredTradingDates();
+
+        Set<LocalDate> missingDates =
+                findMissingDates(requiredDates, existingDates);
+
+        if (missingDates.isEmpty()) {
+            return false;
+        }
+
+        JSONObject timeSeries =
+                fetchDailyTimeSeries(upperSymbol);
+
+        boolean addedAny = false;
+
+        for (String dateText : timeSeries.keySet()) {
+
+            LocalDate date = LocalDate.parse(dateText);
+
+            if (!missingDates.contains(date)) {
+                continue;
+            }
+
+            JSONObject dailyData =
+                    timeSeries.getJSONObject(dateText);
+
+            String close =
+                    dailyData.getString("4. close");
+
+            appendRecord(
+                    upperSymbol + "," + dateText + "," + close
+            );
+
+            addedAny = true;
+        }
+
+        return addedAny;
     }
 
     private static void recordStockData()
