@@ -1,10 +1,6 @@
 package stocktraderproapp;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,9 +17,6 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
 public class WatchlistScreen extends BaseScreen {
-
-    private static final Path STOCK_DATA_FILE =
-            Path.of("stock_closing_prices_may5_2026_to_100_days_prior.txt");
 
     public WatchlistScreen(ScreenManager manager) {
         super(manager);
@@ -76,7 +69,7 @@ public class WatchlistScreen extends BaseScreen {
     private HBox buildRow(String symbol, double[] range) {
 
         String companyName =
-                WatchlistManager.COMPANY_NAMES.getOrDefault(symbol, "");
+                StockInfo.COMPANY_NAMES.getOrDefault(symbol, "");
 
         Label symbolLabel = new Label(symbol);
         symbolLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
@@ -126,64 +119,37 @@ public class WatchlistScreen extends BaseScreen {
 
     private Map<String, double[]> loadPriceRanges(Set<String> symbols) {
 
-        Map<String, List<Double>> closesBySymbol = new HashMap<>();
+        StockDataFileManager fileManager =
+                new StockDataFileManager(StockInfo.STOCK_DATA_FILE);
 
-        if (!Files.exists(STOCK_DATA_FILE)) {
-            return new HashMap<>();
-        }
+        Map<String, double[]> result = new HashMap<>();
 
-        try (BufferedReader reader = Files.newBufferedReader(STOCK_DATA_FILE)) {
+        try {
 
-            String line;
+            Map<String, List<StockRecord>> allRecords =
+                    fileManager.loadAllRecords();
 
-            while ((line = reader.readLine()) != null) {
+            for (Map.Entry<String, List<StockRecord>> entry : allRecords.entrySet()) {
 
-                line = line.trim();
-
-                if (line.isEmpty()
-                        || line.equalsIgnoreCase("Symbol,Date,Close")) {
+                if (!symbols.contains(entry.getKey())) {
                     continue;
                 }
 
-                String[] parts = line.split(",");
+                List<StockRecord> records = entry.getValue();
 
-                if (parts.length < 3) {
-                    continue;
+                if (records.size() >= 2) {
+                    result.put(
+                            entry.getKey(),
+                            new double[]{
+                                    records.get(0).getClose(),
+                                    records.get(records.size() - 1).getClose()
+                            }
+                    );
                 }
-
-                String sym = parts[0].trim().toUpperCase();
-
-                if (!symbols.contains(sym)) {
-                    continue;
-                }
-
-                try {
-
-                    double close = Double.parseDouble(parts[2].trim());
-
-                    closesBySymbol
-                            .computeIfAbsent(sym, k -> new ArrayList<>())
-                            .add(close);
-
-                } catch (NumberFormatException ignored) {}
             }
 
         } catch (IOException e) {
             e.printStackTrace();
-        }
-
-        Map<String, double[]> result = new HashMap<>();
-
-        for (Map.Entry<String, List<Double>> entry : closesBySymbol.entrySet()) {
-
-            List<Double> closes = entry.getValue();
-
-            if (closes.size() >= 2) {
-                result.put(
-                        entry.getKey(),
-                        new double[]{closes.get(0), closes.get(closes.size() - 1)}
-                );
-            }
         }
 
         return result;

@@ -3,6 +3,8 @@ package stocktraderproapp;
 import org.junit.After;
 import org.junit.Test;
 
+import java.util.Set;
+
 import static org.junit.Assert.*;
 
 public class WatchlistManagerTest {
@@ -11,6 +13,7 @@ public class WatchlistManagerTest {
     public void cleanUp() {
         WatchlistManager.removeSymbol("NFLX");
         WatchlistManager.removeSymbol("AAPL");
+        WatchlistManager.removeSymbol("GOOGL");
     }
 
     @Test
@@ -42,4 +45,5 @@ public class WatchlistManagerTest {
         WatchlistManager.addSymbol("aapl");
         assertTrue(WatchlistManager.contains("AAPL"));
     }
+
 }

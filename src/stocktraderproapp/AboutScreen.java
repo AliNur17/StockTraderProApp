@@ -14,21 +14,49 @@ public class AboutScreen extends BaseScreen {
 
     @Override
     public Parent getView() {
-        Label title = new Label("About StockTraderProApp");
-        title.setStyle("-fx-font-size: 26px; -fx-font-weight: bold;");
+        Label title = new Label("StockTraderProApp");
+        title.setStyle("-fx-font-size: 28px; -fx-font-weight: bold;");
 
         Label description = new Label(
-            "StockTraderProApp is a JavaFX stock viewer designed to display closing price trends."
+            "A JavaFX stock viewer for browsing closing price trends, "
+            + "comparing multiple stocks, and managing a personal watchlist. "
+            + "Stock data is fetched from the Alpha Vantage API and cached locally."
         );
         description.setWrapText(true);
-        description.setMaxWidth(450);
+        description.setMaxWidth(500);
+        description.setStyle("-fx-text-fill: #444444;");
+
+        Label courseLabel = new Label("CS 151 — Object-Oriented Design");
+        courseLabel.setStyle("-fx-font-size: 13px; -fx-font-weight: bold; -fx-padding: 10 0 4 0;");
+
+        Label teamLabel = new Label("Team: Collaborative Coding Project");
+        teamLabel.setStyle("-fx-font-size: 12px;");
+
+        Label membersTitle = new Label("Members:");
+        membersTitle.setStyle("-fx-font-size: 12px; -fx-font-weight: bold;");
+
+        Label members = new Label(
+            "  Tuan Nguyen\n  Justin Lai\n  Alisher Nurmatov\n  Hruday Prathipati"
+        );
+        members.setStyle("-fx-font-size: 12px;");
 
         Button backButton = new Button("Back");
         backButton.setOnAction(e -> manager.show(Main.HOME));
 
-        VBox root = new VBox(20, title, description, backButton);
-        root.setAlignment(Pos.CENTER);
+        VBox root = new VBox(12,
+                title,
+                description,
+                courseLabel,
+                teamLabel,
+                membersTitle,
+                members,
+                backButton
+        );
+        root.setAlignment(Pos.CENTER_LEFT);
+        root.setPadding(new javafx.geometry.Insets(40));
+        root.setMaxWidth(560);
 
-        return root;
+        javafx.scene.layout.BorderPane wrapper = new javafx.scene.layout.BorderPane(root);
+        return wrapper;
     }
 }
