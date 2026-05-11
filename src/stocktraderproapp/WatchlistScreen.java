@@ -20,6 +20,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
+// makes screen for watchlist based on watchlist.txt that shows the stocks, price, etc.
 public class WatchlistScreen extends BaseScreen {
 
     private static final Path STOCK_DATA_FILE =

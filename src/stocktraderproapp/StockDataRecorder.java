@@ -20,6 +20,7 @@ import javafx.concurrent.Task;
 
 import org.json.JSONObject;
 
+// builds the stock_closing_prices txt file
 public class StockDataRecorder {
 
     private static final String API_KEY = "DPTNWD8PD2WLDQ0E";
