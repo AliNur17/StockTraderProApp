@@ -8,7 +8,6 @@ import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
-// constructs list for users watchlist (watchlist.txt)
 public class WatchlistManager {
 
     private static final Path WATCHLIST_FILE = Path.of("watchlist.txt");

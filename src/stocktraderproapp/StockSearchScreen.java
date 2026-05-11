@@ -1,8 +1,6 @@
-package stocktraderproapp;
+﻿package stocktraderproapp;
 
 import java.io.IOException;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -10,18 +8,10 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeSet;
 
-import javafx.application.Platform;
-import javafx.concurrent.Task;
-import javafx.geometry.Bounds;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.Node;
 import javafx.scene.Parent;
-import javafx.scene.chart.LineChart;
-import javafx.scene.chart.NumberAxis;
-import javafx.scene.chart.XYChart;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
@@ -30,15 +20,9 @@ import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.Pane;
 import javafx.scene.layout.Priority;
-import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
-import javafx.scene.shape.Circle;
-import javafx.scene.shape.Line;
-import javafx.util.StringConverter;
 
-// search area that has list of stocks on left
 public class StockSearchScreen extends BaseScreen {
 
     private final Map<String, List<StockRecord>> stockDataBySymbol =
@@ -53,6 +37,9 @@ public class StockSearchScreen extends BaseScreen {
     private final SymbolColorManager colorManager =
             new SymbolColorManager();
 
+    private final GraphInterface graphInterface =
+            new StockGraph();
+
     private String currentSingleSymbol = null;
     private Button watchlistToggleButton;
 
@@ -65,41 +52,6 @@ public class StockSearchScreen extends BaseScreen {
     public Parent getView() {
 
         StockDataRecorder.startRecordingInBackground();
-
-        NumberAxis xAxis =
-                new NumberAxis();
-
-        NumberAxis yAxis =
-                new NumberAxis();
-
-        xAxis.setLabel("Date");
-        yAxis.setLabel("Closing Price ($)");
-
-        xAxis.setAutoRanging(false);
-        yAxis.setAutoRanging(false);
-
-        LineChart<Number, Number> chart =
-                new LineChart<>(xAxis, yAxis);
-
-        chart.setTitle("Select a Stock");
-        chart.setCreateSymbols(false);
-        chart.setAnimated(false);
-        chart.setLegendVisible(false);
-        chart.setPadding(new Insets(20, 40, 10, 40));
-
-        Pane hoverPane =
-                new ChartHoverOverlay(chart, xAxis, yAxis).getPane();
-
-        StackPane chartStack =
-                new StackPane(
-                        chart,
-                        hoverPane
-                );
-
-        VBox chartArea =
-                new VBox(chartStack);
-
-        VBox.setVgrow(chartStack, Priority.ALWAYS);
 
         TextField stockSearchField =
                 new TextField();
@@ -142,24 +94,36 @@ public class StockSearchScreen extends BaseScreen {
         searchStatus.setMaxWidth(Double.MAX_VALUE);
         searchStatus.setStyle("-fx-font-size: 10px;");
 
-        ProgressIndicator loadingSpinner = new ProgressIndicator();
+        ProgressIndicator loadingSpinner =
+                new ProgressIndicator();
+
         loadingSpinner.setMaxSize(22, 22);
         loadingSpinner.setVisible(false);
 
-        watchlistToggleButton = new Button("Add to Watchlist");
+        watchlistToggleButton =
+                new Button("Add to Watchlist");
+
         watchlistToggleButton.setMaxWidth(Double.MAX_VALUE);
         watchlistToggleButton.setDisable(true);
+
         watchlistToggleButton.setOnAction(e -> {
-            if (currentSingleSymbol == null) return;
+
+            if (currentSingleSymbol == null) {
+                return;
+            }
+
             if (WatchlistManager.contains(currentSingleSymbol)) {
                 WatchlistManager.removeSymbol(currentSingleSymbol);
             } else {
                 WatchlistManager.addSymbol(currentSingleSymbol);
             }
+
             refreshWatchlistButton();
         });
 
-        Button viewWatchlistButton = new Button("View Watchlist");
+        Button viewWatchlistButton =
+                new Button("View Watchlist");
+
         viewWatchlistButton.setMaxWidth(Double.MAX_VALUE);
         viewWatchlistButton.setOnAction(e -> manager.show(Main.WATCHLIST));
 
@@ -193,13 +157,15 @@ public class StockSearchScreen extends BaseScreen {
         leftBar.setMinWidth(210);
         leftBar.setMaxWidth(210);
 
+        VBox graphArea =
+                new VBox(graphInterface.getView());
+
+        VBox.setVgrow(graphInterface.getView(), Priority.ALWAYS);
+
         Runnable refreshButtons =
                 () -> refreshStockButtons(
                         stockButtonBox,
                         stockSearchField.getText(),
-                        chart,
-                        xAxis,
-                        yAxis,
                         overlayCheckBox
                 );
 
@@ -223,23 +189,16 @@ public class StockSearchScreen extends BaseScreen {
                         selectedOverlaySymbols.clear();
                     }
 
-                    updateChart(
-                            chart,
-                            xAxis,
-                            yAxis,
-                            overlayCheckBox
-                    );
-
+                    updateGraph(overlayCheckBox);
                     refreshButtons.run();
                 }
         );
-
 
         BorderPane root =
                 new BorderPane();
 
         root.setLeft(leftBar);
-        root.setCenter(chartArea);
+        root.setCenter(graphArea);
 
         return root;
     }
@@ -247,9 +206,6 @@ public class StockSearchScreen extends BaseScreen {
     private void refreshStockButtons(
             VBox stockButtonBox,
             String filter,
-            LineChart<Number, Number> chart,
-            NumberAxis xAxis,
-            NumberAxis yAxis,
             CheckBox overlayCheckBox) {
 
         stockButtonBox.getChildren().clear();
@@ -312,19 +268,11 @@ public class StockSearchScreen extends BaseScreen {
                         overlayCheckBox
                 );
 
-                updateChart(
-                        chart,
-                        xAxis,
-                        yAxis,
-                        overlayCheckBox
-                );
+                updateGraph(overlayCheckBox);
 
                 refreshStockButtons(
                         stockButtonBox,
                         filter,
-                        chart,
-                        xAxis,
-                        yAxis,
                         overlayCheckBox
                 );
 
@@ -367,70 +315,30 @@ public class StockSearchScreen extends BaseScreen {
         }
     }
 
-    private void updateChart(
-            LineChart<Number, Number> chart,
-            NumberAxis xAxis,
-            NumberAxis yAxis,
-            CheckBox overlayCheckBox) {
-
-        chart.getData().clear();
+    private void updateGraph(CheckBox overlayCheckBox) {
 
         List<String> symbolsToDisplay =
                 getSymbolsToDisplay(overlayCheckBox);
 
         if (symbolsToDisplay.isEmpty()) {
-            chart.setTitle("Select a Stock");
+            graphInterface.clear("Select a Stock");
             return;
         }
 
-        List<LocalDate> axisDates =
-                buildAxisDatesForSymbols(symbolsToDisplay);
-
-        if (axisDates.isEmpty()) {
-            chart.setTitle("No saved TXT data found");
-            return;
-        }
-
-        Map<LocalDate, Integer> dateIndexMap =
-                buildDateIndexMap(axisDates);
-
-        List<String> xLabels =
-                buildDateLabels(axisDates);
-
-        double[] yRange =
-                addSeriesToChart(
-                        chart,
-                        symbolsToDisplay,
-                        dateIndexMap
-                );
-
-        if (chart.getData().isEmpty()) {
-            chart.setTitle("No saved TXT data found for selected stock");
-            return;
-        }
-
-        configureXAxis(
-                xAxis,
-                axisDates,
-                xLabels
-        );
-
-        configureYAxis(
-                yAxis,
-                yRange[0],
-                yRange[1]
-        );
+        String title;
 
         if (overlayCheckBox.isSelected()) {
-            chart.setTitle("Overlayed Closing Prices from TXT File");
+            title = "Overlayed Closing Prices from TXT File";
         } else {
-            chart.setTitle(
-                    symbolsToDisplay.get(0)
-                            + " Closing Prices from TXT File"
-            );
+            title = symbolsToDisplay.get(0)
+                    + " Closing Prices from TXT File";
         }
 
-        Platform.runLater(() -> applyStableSeriesColors(chart));
+        graphInterface.showFullRecords(
+                title,
+                stockDataBySymbol,
+                symbolsToDisplay
+        );
     }
 
     private List<String> getSymbolsToDisplay(
@@ -449,196 +357,6 @@ public class StockSearchScreen extends BaseScreen {
         }
 
         return symbolsToDisplay;
-    }
-
-    private Map<LocalDate, Integer> buildDateIndexMap(
-            List<LocalDate> axisDates) {
-
-        Map<LocalDate, Integer> dateIndexMap =
-                new HashMap<>();
-
-        for (int i = 0; i < axisDates.size(); i++) {
-            dateIndexMap.put(axisDates.get(i), i);
-        }
-
-        return dateIndexMap;
-    }
-
-    private List<String> buildDateLabels(
-            List<LocalDate> axisDates) {
-
-        List<String> xLabels =
-                new ArrayList<>();
-
-        DateTimeFormatter formatter =
-                DateTimeFormatter.ofPattern("MMM dd");
-
-        for (LocalDate date : axisDates) {
-            xLabels.add(date.format(formatter));
-        }
-
-        return xLabels;
-    }
-
-    private double[] addSeriesToChart(
-            LineChart<Number, Number> chart,
-            List<String> symbolsToDisplay,
-            Map<LocalDate, Integer> dateIndexMap) {
-
-        double minClose =
-                Double.MAX_VALUE;
-
-        double maxClose =
-                0;
-
-        for (String symbol : symbolsToDisplay) {
-
-            List<StockRecord> records =
-                    stockDataBySymbol.get(symbol);
-
-            if (records == null || records.isEmpty()) {
-                continue;
-            }
-
-            XYChart.Series<Number, Number> series =
-                    new XYChart.Series<>();
-
-            series.setName(symbol);
-
-            for (StockRecord record : records) {
-
-                Integer xIndex =
-                        dateIndexMap.get(record.getDate());
-
-                if (xIndex == null) {
-                    continue;
-                }
-
-                XYChart.Data<Number, Number> dataPoint =
-                        new XYChart.Data<>(
-                                xIndex,
-                                record.getClose()
-                        );
-
-                dataPoint.setExtraValue(record);
-
-                series.getData().add(dataPoint);
-
-                minClose =
-                        Math.min(
-                                minClose,
-                                record.getClose()
-                        );
-
-                maxClose =
-                        Math.max(
-                                maxClose,
-                                record.getClose()
-                        );
-            }
-
-            chart.getData().add(series);
-        }
-
-        if (minClose == Double.MAX_VALUE) {
-            minClose = 0;
-        }
-
-        return new double[] {
-                minClose,
-                maxClose
-        };
-    }
-
-    private void configureXAxis(
-            NumberAxis xAxis,
-            List<LocalDate> axisDates,
-            List<String> xLabels) {
-
-        int finalDayIndex =
-                axisDates.size();
-
-        xAxis.setLowerBound(0);
-        xAxis.setUpperBound(Math.max(0, finalDayIndex - 1));
-        xAxis.setTickUnit(Math.max(1, finalDayIndex / 10));
-
-        xAxis.setTickLabelFormatter(
-                new StringConverter<Number>() {
-
-                    @Override
-                    public String toString(Number value) {
-
-                        int index =
-                                value.intValue();
-
-                        if (index >= 0
-                                && index < xLabels.size()) {
-
-                            return xLabels.get(index);
-                        }
-
-                        return "";
-                    }
-
-                    @Override
-                    public Number fromString(String string) {
-                        return 0;
-                    }
-                }
-        );
-    }
-
-    private void configureYAxis(
-            NumberAxis yAxis,
-            double minClose,
-            double maxClose) {
-
-        double yPadding =
-                Math.max(
-                        1,
-                        (maxClose - minClose) * 0.15
-                );
-
-        yAxis.setLowerBound(
-                Math.max(
-                        0,
-                        minClose - yPadding
-                )
-        );
-
-        yAxis.setUpperBound(
-                maxClose + yPadding
-        );
-
-        yAxis.setTickUnit(
-                Math.max(
-                        1,
-                        (maxClose - minClose) / 10
-                )
-        );
-    }
-
-    private List<LocalDate> buildAxisDatesForSymbols(
-            List<String> symbolsToDisplay) {
-
-        Set<LocalDate> allDates =
-                new TreeSet<>();
-
-        for (String symbol : symbolsToDisplay) {
-
-            List<StockRecord> records =
-                    stockDataBySymbol.get(symbol);
-
-            if (records == null) {
-                continue;
-            }
-
-            for (StockRecord record : records) {
-                allDates.add(record.getDate());
-            }
-        }
-
-        return new ArrayList<>(allDates);
     }
 
     private void loadAllStockDataFromTxt() {
@@ -667,41 +385,11 @@ public class StockSearchScreen extends BaseScreen {
         }
     }
 
-
-    private void applyStableSeriesColors(
-            LineChart<Number, Number> chart) {
-
-        for (XYChart.Series<Number, Number> series
-                : chart.getData()) {
-
-            String color =
-                    colorManager.getColorForSymbol(series.getName());
-
-            Node seriesNode =
-                    series.getNode();
-
-            if (seriesNode != null) {
-
-                Node line =
-                        seriesNode.lookup(".chart-series-line");
-
-                if (line != null) {
-                    line.setStyle(
-                            "-fx-stroke: "
-                                    + color
-                                    + ";"
-                                    + "-fx-stroke-width: 2px;"
-                    );
-                }
-            }
-        }
-    }
-
     static String formatErrorMessage(String symbol, String rawError) {
 
         if (rawError != null
                 && (rawError.contains("rate limit")
-                        || rawError.contains("25 requests"))) {
+                || rawError.contains("25 requests"))) {
             return "API rate limit reached. Try again tomorrow.";
         }
 
@@ -757,6 +445,4 @@ public class StockSearchScreen extends BaseScreen {
                 pct
         );
     }
-
-
 }
