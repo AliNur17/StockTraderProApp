@@ -38,6 +38,7 @@ import javafx.scene.shape.Circle;
 import javafx.scene.shape.Line;
 import javafx.util.StringConverter;
 
+// search area that has list of stocks on left
 public class StockSearchScreen extends BaseScreen {
 
     private final Map<String, List<StockRecord>> stockDataBySymbol =
