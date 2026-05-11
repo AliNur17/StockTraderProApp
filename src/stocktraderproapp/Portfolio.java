@@ -107,4 +107,11 @@ public class Portfolio {
         }
         return 0;
     }
+
+    public double getHoldingPrice(String s) {
+        if (holdings.containsKey(s) && currentPricePerShare.containsKey(s)) {
+            return holdings.get(s) * currentPricePerShare.get(s);
+        }
+        return 0;
+    }
 }
