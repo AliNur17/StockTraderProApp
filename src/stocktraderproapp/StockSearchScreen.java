@@ -1,4 +1,4 @@
-package stocktraderproapp;
+﻿package stocktraderproapp;
 
 import java.io.IOException;
 import java.time.LocalDate;
