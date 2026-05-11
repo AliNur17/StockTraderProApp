@@ -1,5 +1,6 @@
 package stocktraderproapp;
 
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
 import javafx.geometry.Bounds;
@@ -75,16 +76,18 @@ public class ChartHoverOverlay {
         hoverPane = new Pane();
         hoverPane.setPickOnBounds(true);
         hoverPane.setStyle("-fx-background-color: transparent;");
-        hoverPane.getChildren().addAll(horizontalLine, verticalLine, hoverPoint, hoverBox);
+        hoverPane.getChildren().addAll(
+                horizontalLine,
+                verticalLine,
+                hoverPoint,
+                hoverBox
+        );
 
-        hoverPane.setOnMouseMoved(event -> update(event.getX(), event.getY()));
+        hoverPane.setOnMouseMoved(
+                event -> update(event.getX(), event.getY())
+        );
 
-        hoverPane.setOnMouseExited(event -> {
-            horizontalLine.setVisible(false);
-            verticalLine.setVisible(false);
-            hoverPoint.setVisible(false);
-            hoverBox.setVisible(false);
-        });
+        hoverPane.setOnMouseExited(event -> hideAll());
     }
 
     public Pane getPane() {
@@ -96,11 +99,14 @@ public class ChartHoverOverlay {
         Node plotBackground = chart.lookup(".chart-plot-background");
 
         if (plotBackground == null) {
+            hideAll();
             return;
         }
 
         Bounds plotBounds = hoverPane.sceneToLocal(
-                plotBackground.localToScene(plotBackground.getBoundsInLocal())
+                plotBackground.localToScene(
+                        plotBackground.getBoundsInLocal()
+                )
         );
 
         if (!plotBounds.contains(mouseX, mouseY)) {
@@ -110,6 +116,7 @@ public class ChartHoverOverlay {
 
         XYChart.Series<Number, Number> closestSeries = null;
         XYChart.Data<Number, Number> closestData = null;
+
         double closestX = 0;
         double closestY = 0;
         double smallestDistance = Double.MAX_VALUE;
@@ -119,12 +126,19 @@ public class ChartHoverOverlay {
             for (XYChart.Data<Number, Number> data : series.getData()) {
 
                 double displayX = plotBounds.getMinX()
-                        + xAxis.getDisplayPosition(data.getXValue().doubleValue());
+                        + xAxis.getDisplayPosition(
+                                data.getXValue().doubleValue()
+                        );
 
                 double displayY = plotBounds.getMinY()
-                        + yAxis.getDisplayPosition(data.getYValue().doubleValue());
+                        + yAxis.getDisplayPosition(
+                                data.getYValue().doubleValue()
+                        );
 
-                double distance = Math.hypot(mouseX - displayX, mouseY - displayY);
+                double distance = Math.hypot(
+                        mouseX - displayX,
+                        mouseY - displayY
+                );
 
                 if (distance < smallestDistance) {
                     smallestDistance = distance;
@@ -136,20 +150,20 @@ public class ChartHoverOverlay {
             }
         }
 
-        if (closestData == null || smallestDistance > 35) {
+        if (closestSeries == null
+                || closestData == null
+                || smallestDistance > 35) {
+
             hideAll();
             return;
         }
 
-        StockRecord record = (StockRecord) closestData.getExtraValue();
+        String hoverText = buildHoverText(closestSeries, closestData);
 
-        if (record == null || closestSeries == null) {
+        if (hoverText == null || hoverText.isBlank()) {
+            hideAll();
             return;
         }
-
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy");
-
-        String closeValue = String.format("%.2f", record.getClose());
 
         horizontalLine.setStartX(plotBounds.getMinX());
         horizontalLine.setEndX(plotBounds.getMaxX());
@@ -164,12 +178,7 @@ public class ChartHoverOverlay {
         hoverPoint.setCenterX(closestX);
         hoverPoint.setCenterY(closestY);
 
-        hoverBox.setText(
-                closestSeries.getName()
-                        + "\nDate: " + record.getDate().format(formatter)
-                        + "\nClose: $" + closeValue
-        );
-
+        hoverBox.setText(hoverText);
         hoverBox.applyCss();
         hoverBox.autosize();
 
@@ -184,12 +193,58 @@ public class ChartHoverOverlay {
             boxY = plotBounds.getMinY() + 5;
         }
 
+        if (boxY + hoverBox.getHeight() > plotBounds.getMaxY()) {
+            boxY = plotBounds.getMaxY() - hoverBox.getHeight() - 5;
+        }
+
         hoverBox.relocate(boxX, boxY);
 
         horizontalLine.setVisible(true);
         verticalLine.setVisible(true);
         hoverPoint.setVisible(true);
         hoverBox.setVisible(true);
+    }
+
+    private String buildHoverText(
+            XYChart.Series<Number, Number> series,
+            XYChart.Data<Number, Number> data) {
+
+        Object extraValue = data.getExtraValue();
+
+        if (extraValue instanceof StockRecord) {
+
+            StockRecord record = (StockRecord) extraValue;
+
+            DateTimeFormatter formatter =
+                    DateTimeFormatter.ofPattern("MMM dd, yyyy");
+
+            return series.getName()
+                    + "\nDate: " + record.getDate().format(formatter)
+                    + "\nClose: $" + String.format("%.2f", record.getClose());
+        }
+
+        if (extraValue instanceof SummaryDataPoint) {
+
+            SummaryDataPoint point = (SummaryDataPoint) extraValue;
+
+            DateTimeFormatter formatter =
+                    DateTimeFormatter.ofPattern("MMM dd, yyyy");
+
+            return series.getName()
+                    + "\nDate: " + point.getDate().format(formatter)
+                    + "\nValue: $" + String.format("%.2f", point.getValue());
+        }
+
+        Number xValue = data.getXValue();
+        Number yValue = data.getYValue();
+
+        if (xValue == null || yValue == null) {
+            return null;
+        }
+
+        return series.getName()
+                + "\nDay: " + xValue.intValue()
+                + "\nValue: $" + String.format("%.2f", yValue.doubleValue());
     }
 
     private void hideAll() {
