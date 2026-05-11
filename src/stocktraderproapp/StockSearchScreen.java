@@ -1,4 +1,4 @@
-﻿package stocktraderproapp;
+package stocktraderproapp;
 
 import java.io.IOException;
 import java.time.LocalDate;
@@ -134,24 +134,6 @@ public class StockSearchScreen extends BaseScreen {
         Label sidebarTitle =
                 new Label("Stocks");
 
-        Label customSearchLabel =
-                new Label("Search Any Stock");
-
-        customSearchLabel.setStyle(
-                "-fx-font-size: 11px; -fx-text-fill: #888888;"
-        );
-
-        TextField customSearchField =
-                new TextField();
-
-        customSearchField.setPromptText("Ticker (e.g. NFLX)");
-        customSearchField.setMaxWidth(Double.MAX_VALUE);
-
-        Button searchButton =
-                new Button("Search");
-
-        searchButton.setMaxWidth(Double.MAX_VALUE);
-
         Label searchStatus =
                 new Label();
 
@@ -180,15 +162,22 @@ public class StockSearchScreen extends BaseScreen {
         viewWatchlistButton.setMaxWidth(Double.MAX_VALUE);
         viewWatchlistButton.setOnAction(e -> manager.show(Main.WATCHLIST));
 
+        Label searchLabel =
+                new Label("Search for stocks below...");
+
+        searchLabel.setStyle(
+                "-fx-text-fill: #9a9a9a;"
+                        + "-fx-font-size: 11px;"
+                        + "-fx-font-style: italic;"
+        );
+
         VBox leftBar =
                 new VBox(
                         8,
                         sidebarTitle,
-                        customSearchLabel,
-                        customSearchField,
-                        searchButton,
                         loadingSpinner,
                         searchStatus,
+                        searchLabel,
                         new Separator(),
                         stockSearchField,
                         stockScrollPane,
@@ -244,20 +233,6 @@ public class StockSearchScreen extends BaseScreen {
                 }
         );
 
-        customSearchField.setOnAction(e -> searchButton.fire());
-
-        searchButton.setOnAction(e -> handleCustomSearch(
-                customSearchField.getText().trim().toUpperCase(),
-                searchStatus,
-                loadingSpinner,
-                searchButton,
-                chart,
-                xAxis,
-                yAxis,
-                overlayCheckBox,
-                stockButtonBox,
-                stockSearchField
-        ));
 
         BorderPane root =
                 new BorderPane();
@@ -266,88 +241,6 @@ public class StockSearchScreen extends BaseScreen {
         root.setCenter(chartArea);
 
         return root;
-    }
-
-    private void handleCustomSearch(
-            String symbol,
-            Label statusLabel,
-            ProgressIndicator spinner,
-            Button searchBtn,
-            LineChart<Number, Number> chart,
-            NumberAxis xAxis,
-            NumberAxis yAxis,
-            CheckBox overlayCheckBox,
-            VBox stockButtonBox,
-            TextField filterField) {
-
-        if (symbol.isEmpty()) {
-            statusLabel.setText("Enter a ticker symbol.");
-            return;
-        }
-
-        statusLabel.setText("");
-        spinner.setVisible(true);
-        searchBtn.setDisable(true);
-
-        Task<Boolean> task =
-                new Task<>() {
-
-            @Override
-            protected Boolean call() throws Exception {
-                return StockDataRecorder.fetchAndRecordSymbol(symbol);
-            }
-        };
-
-        task.setOnSucceeded(event -> {
-
-            spinner.setVisible(false);
-            searchBtn.setDisable(false);
-
-            loadAllStockDataFromTxt();
-
-            if (!stockDataBySymbol.containsKey(symbol)) {
-                statusLabel.setText("\"" + symbol + "\" not found. Check the ticker.");
-                return;
-            }
-
-            boolean wasFetched = task.getValue();
-
-            statusLabel.setText(
-                    wasFetched
-                            ? "Loaded " + symbol + "."
-                            : symbol + " (cached)."
-            );
-
-            currentSingleSymbol = symbol;
-            selectedOverlaySymbols.clear();
-
-            updateChart(chart, xAxis, yAxis, overlayCheckBox);
-
-            refreshStockButtons(
-                    stockButtonBox,
-                    filterField.getText(),
-                    chart,
-                    xAxis,
-                    yAxis,
-                    overlayCheckBox
-            );
-
-            refreshWatchlistButton();
-        });
-
-        task.setOnFailed(event -> {
-
-            spinner.setVisible(false);
-            searchBtn.setDisable(false);
-
-            Throwable error = task.getException();
-            String msg = error != null ? error.getMessage() : null;
-            statusLabel.setText(formatErrorMessage(symbol, msg));
-        });
-
-        Thread thread = new Thread(task);
-        thread.setDaemon(true);
-        thread.start();
     }
 
     private void refreshStockButtons(
@@ -829,9 +722,9 @@ public class StockSearchScreen extends BaseScreen {
         watchlistToggleButton.setDisable(false);
 
         if (WatchlistManager.contains(currentSingleSymbol)) {
-            watchlistToggleButton.setText("â˜… Remove from Watchlist");
+            watchlistToggleButton.setText("Remove from Watchlist");
         } else {
-            watchlistToggleButton.setText("â˜† Add to Watchlist");
+            watchlistToggleButton.setText("Add to Watchlist");
         }
     }
 
